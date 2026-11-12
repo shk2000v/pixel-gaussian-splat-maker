@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>픽셀 스플랫 공방</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;700&family=Silkscreen:wght@400;700&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <span class="mark" aria-hidden="true">PIXEL&nbsp;SPLAT&nbsp;FORGE</span>
+    <h1>픽셀 스플랫 공방</h1>
+    <p class="lede">키워드를 넣으면 복셀 격자에 맞춘 3D 가우시안 스플랫을 만들고, 저해상도 픽셀 화면으로 그립니다. 기존 3DGS 파일을 픽셀화할 수도 있고, 결과는 표준 <code>.ply</code>·<code>.splat</code>으로 내보냅니다.</p>
+  </header>
+
+  <div class="app">
+    <section class="stage" aria-label="미리보기">
+      <div class="screen">
+        <canvas id="view" tabindex="0" role="img" aria-label="픽셀 스플랫 미리보기" aria-describedby="stat hint"></canvas>
+        <p class="hint" id="hint">드래그 회전 · 휠/핀치 확대 · 방향키 ← → ↑ ↓ , + −</p>
+        <div class="glfail" id="glfail" hidden>이 브라우저에서 WebGL2를 쓸 수 없어 미리보기를 그릴 수 없습니다. 최신 Chrome, Edge, Firefox, Safari에서 열어 주세요.</div>
+      </div>
+      <div class="bar">
+        <button class="sq" id="zin" type="button" aria-label="확대">+</button>
+        <button class="sq" id="zout" type="button" aria-label="축소">−</button>
+        <button id="vreset" type="button">시점 초기화</button>
+        <p class="stat" id="stat" role="status" aria-live="polite">준비 중</p>
+      </div>
+    </section>
+
+    <form class="panel" id="panel" autocomplete="off">
+      <fieldset class="wide">
+        <legend>01<span>키워드로 만들기</span></legend>
+        <div class="kw">
+          <label for="kw" hidden>키워드</label>
+          <input type="text" id="kw" value="버섯, 얼음" placeholder="예: 버섯, 얼음" aria-label="키워드 (쉼표나 공백으로 구분)" enterkeyhint="go">
+          <button class="go" id="gen" type="submit">만들기</button>
+          <button id="reroll" type="button" title="같은 키워드로 다른 변형">다시 뽑기</button>
+          <button id="rand" type="button">아무거나</button>
+        </div>
+        <ul class="read" id="read" aria-label="키워드 해석 결과"></ul>
+        <p class="sub">형태 키워드 (누르면 추가, 최대 3개)</p>
+        <ul class="chips" id="chipS"></ul>
+        <p class="sub">팔레트 키워드</p>
+        <ul class="chips" id="chipM"></ul>
+        <p class="sub">변형·장식 키워드 (어떤 형태에나 겹쳐 씀)</p>
+        <ul class="chips" id="chipX"></ul>
+        <p class="note">목록에 없는 단어는 형태를 바꾸지 못하고 난수 시드로만 쓰입니다. 같은 키워드와 같은 시드는 항상 같은 결과를 냅니다. 같은 형태도 다시 뽑으면 비율과 세부가 달라집니다.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>02<span>스플랫 모양</span></legend>
+        <div class="row"><label for="n">격자 해상도</label><input type="range" id="n" min="12" max="40" step="2" value="24"><output id="nO" for="n"></output></div>
+        <div class="row"><label for="size">스플랫 크기</label><input type="range" id="size" min="0.3" max="1.2" step="0.05" value="0.55"><output id="sizeO" for="size"></output></div>
+        <div class="row"><label for="chaos">흐트러짐</label><input type="range" id="chaos" min="0" max="1" step="0.05" value="0"><output id="chaosO" for="chaos"></output></div>
+        <div class="row"><label for="op">불투명도</label><input type="range" id="op" min="0.2" max="1" step="0.05" value="1"><output id="opO" for="op"></output></div>
+        <p class="note">크기는 복셀 한 칸 대비 가우시안 표준편차(σ)입니다. 흐트러짐을 올리면 위치·축 길이·회전이 무작위로 틀어져 스플랫다운 질감이 됩니다. 이 값들은 내보낸 파일에 그대로 들어갑니다.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>03<span>픽셀 렌더링</span></legend>
+        <div class="btns">
+          <button type="button" id="pPixel" aria-pressed="true">픽셀아트로 보기</button>
+          <button type="button" id="pGauss" aria-pressed="false">원래 가우시안으로 보기</button>
+        </div>
+        <div class="row"><label for="ps">픽셀 크기</label><input type="range" id="ps" min="1" max="12" step="1" value="5"><output id="psO" for="ps"></output></div>
+        <div class="row"><label for="hard">경계 단단함</label><input type="range" id="hard" min="1" max="8" step="0.5" value="5"><output id="hardO" for="hard"></output></div>
+        <div class="row"><label for="square">사각 정도</label><input type="range" id="square" min="0" max="1" step="0.05" value="1"><output id="squareO" for="square"></output></div>
+        <div class="row"><label for="levels">색 단계</label>
+          <select id="levels"><option value="0" selected>제한 없음</option><option value="2">채널당 2단계</option><option value="3">채널당 3단계</option><option value="4">채널당 4단계</option><option value="6">채널당 6단계</option><option value="8">채널당 8단계</option></select><span></span></div>
+        <div class="checks">
+          <label><input type="checkbox" id="dither"> 디더링</label>
+          <label><input type="checkbox" id="cut" checked> 반투명 가장자리 제거</label>
+          <label><input type="checkbox" id="ortho" checked> 직교 투영</label>
+          <label><input type="checkbox" id="snap"> 픽셀 격자에 맞춤</label>
+          <label><input type="checkbox" id="spin" checked> 자동 회전</label>
+          <label><input type="color" id="bg" value="#141833" aria-label="배경색"> 배경색</label>
+        </div>
+        <p class="note">이 묶음은 이 화면의 그리기 방식만 바꿉니다. 내보낸 파일을 다른 뷰어에서 열면 일반 가우시안으로 부드럽게 보입니다.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>04<span>움직임</span></legend>
+        <div class="row"><label for="anim">종류</label>
+          <select id="anim"><option value="none">없음</option><option value="hop" selected>깡충깡충</option><option value="bob">둥실둥실</option><option value="breathe">숨쉬기</option><option value="sway">바람에 흔들리기</option><option value="wave">물결</option><option value="jelly">말랑말랑</option><option value="build">흩어졌다 모이기</option><option value="twinkle">반짝반짝</option></select><span></span></div>
+        <div class="row"><label for="amp">세기</label><input type="range" id="amp" min="0" max="2" step="0.1" value="1"><output id="ampO" for="amp"></output></div>
+        <div class="row"><label for="speed">빠르기</label><input type="range" id="speed" min="0.2" max="3" step="0.1" value="1"><output id="speedO" for="speed"></output></div>
+        <p class="note">움직임은 이 화면에서 스플랫 중심을 매 프레임 옮겨 만듭니다. <code>.ply</code>·<code>.splat</code>에는 정지 상태만 들어가므로, 움직임을 남기려면 아래 영상 녹화를 쓰세요. 기기의 동작 줄이기 설정이 켜져 있으면 처음에는 꺼진 채로 시작합니다.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>05<span>3DGS 파일 픽셀화</span></legend>
+        <label for="file" class="note">학습된 스플랫 파일(<code>.ply</code> 또는 <code>.splat</code>)을 고르면 복셀 격자와 제한 팔레트로 다시 만듭니다. 파일은 이 브라우저 안에서만 처리합니다.</label>
+        <input type="file" id="file" accept=".ply,.splat">
+        <div class="row"><label for="ires">복셀 해상도</label><input type="range" id="ires" min="16" max="96" step="4" value="48"><output id="iresO" for="ires"></output></div>
+        <div class="row"><label for="ik">팔레트 색 수</label><input type="range" id="ik" min="4" max="32" step="1" value="16"><output id="ikO" for="ik"></output></div>
+        <div class="row"><label for="icut">밀도 컷</label><input type="range" id="icut" min="0.05" max="3" step="0.05" value="0.5"><output id="icutO" for="icut"></output></div>
+        <div class="checks"><label><input type="checkbox" id="iflip" checked> 위아래 뒤집기 (Y 아래 좌표계 보정)</label></div>
+        <p class="note">밀도 컷은 한 칸에 모인 불투명도 합의 최솟값입니다. 떠다니는 조각이 많으면 올리세요. 파일 전체를 메모리에 올리므로 아주 큰 파일은 실패할 수 있습니다.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>06<span>내보내기</span></legend>
+        <div class="btns">
+          <button type="button" id="exZip" class="go">스플랫 ZIP 저장</button>
+          <button type="button" id="exPng">PNG 저장 (4배)</button>
+          <button type="button" id="exVid">영상 녹화 (4초)</button>
+        </div>
+        <div class="checks"><label><input type="checkbox" id="exFlip"> X축 180° 회전해서 내보내기 (Y 아래 좌표계용)</label></div>
+        <p class="note">ZIP에는 INRIA 3DGS 형식 <code>.ply</code>, antimatter15 형식 <code>.splat</code>, 설명 <code>README.txt</code>가 들어 있습니다. 이 화면은 Y가 위쪽입니다. 다른 뷰어에서 뒤집혀 보이면 위 옵션을 켜고 다시 저장하세요.</p>
+        <p id="toast" role="status" aria-live="polite"></p>
+      </fieldset>
+
+      <details class="wide">
+        <summary>이 도구가 만드는 것</summary>
+        <p>여기서 말하는 픽셀아트 가우시안 스플랫은 표준으로 정해진 포맷이 아니라 이 도구의 정의입니다. 세 가지를 합친 것입니다.</p>
+        <ul>
+          <li>가우시안 중심을 N³ 복셀 격자에 맞추고, 겉면 칸마다 스플랫 하나를 둡니다.</li>
+          <li>색은 형태마다 4개 슬롯 × 명암 3단계(어둡게·기본·밝게)로 제한하고, 명암은 격자 법선과 고정 광원으로 미리 구워 넣습니다.</li>
+          <li>화면은 저해상도 버퍼에 스플랫을 뒤에서 앞으로 알파 합성한 뒤 최근접 보간으로 키웁니다.</li>
+        </ul>
+        <p>데이터 자체는 위치·스케일·회전·불투명도·색을 가진 일반 3D 가우시안입니다. 그래서 내보낸 파일은 일반 3DGS 뷰어에서 열 수 있습니다. 구면조화는 0차(DC) 색만 씁니다.</p>
+      </details>
+    </form>
+  </div>
+</div>
+
+<script src="js/core.js"></script>
+<script src="js/shapes.js"></script>
+<script src="js/generate.js"></script>
+<script src="js/import.js"></script>
+<script src="js/gaussians.js"></script>
+<script src="js/export.js"></script>
+<script src="js/render.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
